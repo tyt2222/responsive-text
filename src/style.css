@@ -1,6 +1,6 @@
 /* =====================================================
-   Pretext Pro — Stylesheet
-   Medieval Illuminated Text Layout Engine
+   responsive-text — Stylesheet
+   Image-aware text layout engine
    ===================================================== */
 
 /* --- Reset & Base --- */
@@ -12,7 +12,7 @@ body {
     margin: 0;
     padding: 0;
     background: #fdfaf5;
-    font-family: 'UnifrakturMaguntia', cursive;
+    font-family: 'Lora', Georgia, serif;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -45,19 +45,11 @@ body {
     flex-shrink: 0;
 }
 
-.brand-glyph {
-    font-family: 'UnifrakturMaguntia', cursive;
-    font-size: 26px;
-    line-height: 1;
-    color: #5a3e2b;
-}
-
 .brand-title {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
-    color: #5a3e2b;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    color: #2c2c2c;
+    letter-spacing: 0.02em;
 }
 
 .toolbar-controls {
@@ -69,8 +61,8 @@ body {
 .file-label {
     cursor: pointer;
     padding: 6px 14px;
-    background: #5a3e2b;
-    color: #fdfaf5;
+    background: #2c2c2c;
+    color: #fafafa;
     border-radius: 3px;
     font-size: 12px;
     letter-spacing: 0.03em;
@@ -78,7 +70,7 @@ body {
 }
 
 .file-label:hover {
-    background: #3d2a1c;
+    background: #111;
 }
 
 #fileInput {
@@ -116,6 +108,7 @@ body {
     position: absolute;
     white-space: nowrap;
     font-size: 1.15rem;
+    font-family: 'Lora', Georgia, serif;
     color: #111;
     pointer-events: none;
     line-height: 1;
@@ -125,7 +118,7 @@ body {
     will-change: transform;
 }
 
-/* --- Draggable Illumination Image --- */
+/* --- Draggable Image --- */
 #upload-obj {
     position: absolute;
     cursor: grab;

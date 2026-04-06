@@ -18,19 +18,19 @@ import { makeDraggable } from './drag.js';
 
 /**
  * The body text to typeset.
- * Replace or fetch this from an external source to support dynamic content.
+ * Replace this string with any content — or fetch it dynamically from an API or textarea.
  */
-const SOURCE_TEXT = `The Czechs have ceased to preserve their good name and sinfully devote \
-themselves to hedonistic delights. The old of their ilk stuff themselves like pigs and merely \
-idle about in their homes, whilst the young have taken to dog hunting. The noblemen have begun \
-to do that which once behoved only servants. Where once each lord kept his house clean and orderly, \
-now dogs lie there, where ere hunters hunted and lords would come to visit them as need be, today \
-they have devoted themselves to this lowly art, as if they had forgotten about their own blood. \
-Ere they would sit at a table and attend to the affairs of the land and see to the multiplication \
-of its peace and wealth; today they are wont to share a roof with a dog of the hunt and consider \
-conversation of dogs and hunting to be of the most honourable variety. And thus the wealth of their \
-estates is deteriorating and the stench of their dogs shall soon kill them. In days of yore when they \
-set off to war, their own country they did not look and took only from the enemy. Yet what of today?`;
+const SOURCE_TEXT = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod \
+tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud \
+exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor \
+in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint \
+occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. \
+Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, \
+totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae \
+dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, \
+sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam \
+est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius \
+modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem.`;
 
 /** Default position (px) where the image is placed when first uploaded. */
 const IMAGE_DEFAULT_LEFT = 320;
@@ -67,7 +67,7 @@ const measureCtx = document.createElement('canvas').getContext('2d');
  * Must be called after the custom font has loaded so measurements are accurate.
  */
 function buildWordNodes() {
-    measureCtx.font = '1.15rem UnifrakturMaguntia';
+    measureCtx.font = '1.15rem Lora';
     renderArea.innerHTML = '';
     words = [];
 
