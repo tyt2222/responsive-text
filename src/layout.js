@@ -1,142 +1,145 @@
 /**
- * hitmap.js
+ * layout.js
  * ─────────────────────────────────────────────────────────────
- * Builds a compact binary mask from a PNG image's alpha channel,
- * then exposes a fast per-pixel lookup used for text-wrap collision.
+ * Text layout engine: places word nodes left-to-right, top-to-bottom,
+ * nudging right (or wrapping) whenever the current position overlaps
+ * a solid pixel in the image hitmap.
  *
- * Improvements over v1:
- *  - Mask is morphologically dilated by DILATE_RADIUS pixels so text
- *    never touches the image silhouette — no more "glued to the edge" look.
- *  - isBlocked() samples every pixel in the query box (step = 1) so
- *    there are no false-negative gaps at the scale boundaries.
- *  - buildHitmapState() pre-computes scale factors once per layout pass
- *    so they are not recomputed for every word.
- */
-
-const _canvas = document.createElement('canvas');
-const _ctx    = _canvas.getContext('2d', { willReadFrequently: true });
-
-/** Minimum alpha (0–255) for a pixel to count as "solid". */
-const ALPHA_THRESHOLD = 30;
-
-/**
- * Morphological dilation radius (px in hitmap-space).
- * Expanding the mask outward creates a comfortable gap between
- * the image silhouette and the nearest text glyph.
- */
-const DILATE_RADIUS = 6;
-
-/**
- * @typedef {Object} Hitmap
- * @property {number}     w    - Image width in pixels.
- * @property {number}     h    - Image height in pixels.
- * @property {Uint8Array} data - Flat binary mask: 1 = solid, 0 = transparent.
- */
-
-/**
- * Builds a Hitmap from an HTMLImageElement.
- * The returned mask is dilated by DILATE_RADIUS for comfortable text clearance.
+ * Design notes
+ * ────────────
+ * • Words are represented as plain objects { el, w } — the DOM <span>
+ *   is moved via CSS transform (translate) rather than left/top so the
+ *   browser can composite it on the GPU layer without triggering layout.
  *
- * @param {HTMLImageElement} img
- * @returns {Hitmap}
+ * • The nudge loop advances `curX` by NUDGE_STEP px on each collision,
+ *   up to MAX_ATTEMPTS times, before giving up and force-placing the word
+ *   (prevents infinite loops on pathological hitmap shapes).
+ *
+ * • After the image is cleared on a line, a "right-side check" tests whether
+ *   the remaining space after the image is wide enough to resume from curX,
+ *   avoiding orphaned words pushed too far right.
+ *
+ * • Line height and container width are exported constants so callers
+ *   can override them for different page sizes.
  */
-export function buildHitmap(img) {
-    const w = img.naturalWidth;
-    const h = img.naturalHeight;
 
-    _canvas.width  = w;
-    _canvas.height = h;
-    _ctx.clearRect(0, 0, w, h);
-    _ctx.drawImage(img, 0, 0);
+import { buildHitmapState, isBlocked } from './hitmap.js';
 
-    const raw      = _ctx.getImageData(0, 0, w, h).data;
-    const raw_mask = new Uint8Array(w * h);
+/** Horizontal pixel increment when a placement is blocked. */
+const NUDGE_STEP = 2;
 
-    for (let i = 0; i < raw_mask.length; i++) {
-        raw_mask[i] = raw[i * 4 + 3] > ALPHA_THRESHOLD ? 1 : 0;
+/** Hard ceiling on placement attempts per word. */
+const MAX_ATTEMPTS = 1500;
+
+/** Extra clear-space (px) added vertically around each glyph box. */
+export const MARGIN = 10;
+
+/**
+ * Symmetric horizontal padding (px) added on both sides of a word box
+ * during collision tests, so left/right clearance from the silhouette
+ * is identical.
+ */
+const MARGIN_X = 12;
+
+/** Vertical distance between text baselines (px). */
+export const LINE_HEIGHT = 38;
+
+/** Total usable width of the text column (px). */
+export const CONTAINER_WIDTH = 850;
+
+/**
+ * @typedef {Object} WordNode
+ * @property {HTMLSpanElement} el  - The positioned <span> element.
+ * @property {number}          w   - Measured pixel width of the word + trailing space.
+ */
+
+// ─── Helpers ─────────────────────────────────────────────────
+
+/**
+ * Tests whether placing a word at (x, y) collides with the hitmap,
+ * using symmetric horizontal margins on both sides.
+ */
+function wordBlocked(hitmap, state, x, y, wordW) {
+    return isBlocked(hitmap, state, x - MARGIN_X, y, wordW + MARGIN_X * 2, MARGIN, MARGIN);
+}
+
+/**
+ * Scans rightward from `startX` on baseline `y` and returns the first X
+ * position where a word of width `wordW` fits without collision.
+ * Returns null if no such position exists before CONTAINER_WIDTH.
+ *
+ * Using NUDGE_STEP=2 keeps this accurate without being expensive.
+ */
+function findFreeX(hitmap, state, startX, y, wordW) {
+    let x = startX;
+    let attempts = 0;
+    while (x + wordW <= CONTAINER_WIDTH && attempts < MAX_ATTEMPTS) {
+        if (!wordBlocked(hitmap, state, x, y, wordW)) return x;
+        x += NUDGE_STEP;
+        attempts++;
     }
+    return null;
+}
 
-    // --- Morphological dilation (box kernel) ---
-    // Expand every solid pixel outward by DILATE_RADIUS so text
-    // never visually touches the image silhouette edge.
-    const dilated = new Uint8Array(w * h);
-    const r = DILATE_RADIUS;
+// ─── Main export ─────────────────────────────────────────────
 
-    for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-            if (raw_mask[y * w + x]) {
-                const x0 = Math.max(0,     x - r);
-                const x1 = Math.min(w - 1, x + r);
-                const y0 = Math.max(0,     y - r);
-                const y1 = Math.min(h - 1, y + r);
-                for (let dy = y0; dy <= y1; dy++) {
-                    dilated.fill(1, dy * w + x0, dy * w + x1 + 1);
-                }
+/**
+ * Runs a full layout pass over all words, placing each one at the first
+ * unblocked position in reading order.
+ *
+ * Key improvement over the previous version:
+ *   When a word doesn't fit before the image on a line, instead of
+ *   immediately wrapping, we first check if it fits AFTER the image
+ *   on the same line. This fills the right-side gap that caused large
+ *   blank areas in the middle of lines.
+ *
+ * @param {WordNode[]}       words  - Ordered list of word nodes to place.
+ * @param {HTMLElement|null} imgEl  - The draggable <img>, or null.
+ * @param {object|null}      hitmap - Pre-built alpha mask from hitmap.js, or null.
+ * @param {function}         onDone - Called with elapsed ms when the pass finishes.
+ */
+export function runLayout(words, imgEl, hitmap, onDone) {
+    if (!words.length) return;
+
+    const t0    = performance.now();
+    const state = buildHitmapState(hitmap, imgEl);
+
+    let curX = 0;
+    let curY = 28; // first baseline, small top inset
+
+    for (const word of words) {
+        const { el, w } = word;
+        let placed = false;
+
+        // ── Attempt 1: find a free slot from curX on the current line ──
+        const freeX = findFreeX(hitmap, state, curX, curY, w);
+
+        if (freeX !== null && freeX + w <= CONTAINER_WIDTH) {
+            el.style.transform = `translate(${freeX}px, ${curY}px)`;
+            curX   = freeX + w;
+            placed = true;
+        }
+
+        // ── Attempt 2: wrap to next line and try from x=0 ──────────────
+        if (!placed) {
+            curX = 0;
+            curY += LINE_HEIGHT;
+
+            const freeX2 = findFreeX(hitmap, state, curX, curY, w);
+
+            if (freeX2 !== null && freeX2 + w <= CONTAINER_WIDTH) {
+                el.style.transform = `translate(${freeX2}px, ${curY}px)`;
+                curX   = freeX2 + w;
+                placed = true;
             }
         }
-    }
 
-    return { w, h, data: dilated };
-}
-
-/**
- * Pre-computes the transform between screen-space and hitmap-space
- * for a given image element. Call once per layout pass (not per word).
- *
- * @param {Hitmap}      hitmap
- * @param {HTMLElement} imgEl
- * @returns {{ ox: number, oy: number, visW: number, visH: number, scaleX: number, scaleY: number } | null}
- */
-export function buildHitmapState(hitmap, imgEl) {
-    if (!hitmap || !imgEl) return null;
-    const visW = imgEl.offsetWidth;
-    const visH = imgEl.offsetHeight;
-    return {
-        ox:     imgEl.offsetLeft,
-        oy:     imgEl.offsetTop,
-        visW,
-        visH,
-        scaleX: hitmap.w / visW,
-        scaleY: hitmap.h / visH,
-    };
-}
-
-/**
- * Tests whether a text glyph bounding box overlaps any solid pixel in the hitmap.
- *
- * @param {Hitmap}  hitmap  - Pre-built (dilated) mask.
- * @param {object}  state   - Cached state from buildHitmapState().
- * @param {number}  wordX   - Left edge of the word (px, relative to container).
- * @param {number}  wordY   - Baseline Y of the word (px).
- * @param {number}  wordW   - Measured pixel width of the word.
- * @param {number}  ascent  - Pixels above baseline to check.
- * @param {number}  descent - Pixels below baseline to check.
- * @returns {boolean}       - true if blocked.
- */
-export function isBlocked(hitmap, state, wordX, wordY, wordW, ascent, descent) {
-    if (!hitmap || !state) return false;
-
-    const { ox, oy, visW, visH, scaleX, scaleY } = state;
-
-    const tL = wordX;
-    const tR = wordX + wordW;
-    const tT = wordY - ascent;
-    const tB = wordY + descent;
-
-    // AABB rejection
-    if (tB < oy || tT > oy + visH || tR < ox || tL > ox + visW) return false;
-
-    const hStartX = Math.max(0,            Math.round((tL - ox) * scaleX));
-    const hEndX   = Math.min(hitmap.w - 1, Math.round((tR - ox) * scaleX));
-    const hStartY = Math.max(0,            Math.round((tT - oy) * scaleY));
-    const hEndY   = Math.min(hitmap.h - 1, Math.round((tB - oy) * scaleY));
-
-    for (let ly = hStartY; ly <= hEndY; ly++) {
-        const row = ly * hitmap.w;
-        for (let lx = hStartX; lx <= hEndX; lx++) {
-            if (hitmap.data[row + lx]) return true;
+        // ── Fallback: force-place at curX to avoid infinite hang ────────
+        if (!placed) {
+            el.style.transform = `translate(${curX}px, ${curY}px)`;
+            curX += w;
         }
     }
 
-    return false;
+    onDone(performance.now() - t0);
 }
