@@ -14,6 +14,9 @@ import { buildHitmap }   from './hitmap.js';
 import { runLayout }     from './layout.js';
 import { makeDraggable } from './drag.js';
 
+// CSS font string used for both measurement and layout metric lookup
+const BODY_FONT = '1.15rem Lora';
+
 // ─── Configuration ───────────────────────────────────────────
 
 /**
@@ -67,7 +70,7 @@ const measureCtx = document.createElement('canvas').getContext('2d');
  * Must be called after the custom font has loaded so measurements are accurate.
  */
 function buildWordNodes() {
-    measureCtx.font = '1.15rem Lora';
+    measureCtx.font = BODY_FONT;
     renderArea.innerHTML = '';
     words = [];
 
@@ -88,7 +91,7 @@ function buildWordNodes() {
  * Convenience wrapper: runs a layout pass and updates the status bar.
  */
 function layout() {
-    runLayout(words, imgEl, hitmap, (ms) => {
+    runLayout(words, imgEl, hitmap, BODY_FONT, (ms) => {
         debugInfo.textContent = `Rendered in ${ms.toFixed(1)} ms.`;
     });
 }
