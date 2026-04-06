@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pretext Pro — Medieval Illuminated Text Layout Engine</title>
+    <link rel="stylesheet" href="src/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div id="toolbar">
+        <div class="toolbar-brand">
+            <span class="brand-glyph">𝕻</span>
+            <span class="brand-title">Pretext Pro</span>
+        </div>
+        <div class="toolbar-controls">
+            <label class="file-label" for="fileInput">
+                ⊕ Add Illumination (PNG)
+            </label>
+            <input type="file" id="fileInput" accept="image/png">
+        </div>
+        <div class="toolbar-hint">Drag the image to reflow text around it</div>
+    </div>
+
+    <main id="stage">
+        <div id="container">
+            <div id="render-area"></div>
+            <!-- Draggable image is injected here by layout.js -->
+        </div>
+    </main>
+
+    <footer id="status-bar">
+        <span id="debug-info">Ready.</span>
+    </footer>
+
+    <script type="module" src="src/main.js"></script>
+</body>
+</html>
